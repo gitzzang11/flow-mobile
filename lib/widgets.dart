@@ -1251,6 +1251,7 @@ class SettingsSheet extends StatelessWidget {
     required this.settings,
     required this.onToggleTheme,
     required this.onToggleLock,
+    required this.onToggleBiometric,
     required this.onChangePin,
     required this.onLockNow,
     required this.onBackup,
@@ -1261,6 +1262,7 @@ class SettingsSheet extends StatelessWidget {
   final AppSettings settings;
   final ValueChanged<bool> onToggleTheme;
   final ValueChanged<bool> onToggleLock;
+  final ValueChanged<bool> onToggleBiometric;
   final VoidCallback onChangePin;
   final VoidCallback onLockNow;
   final VoidCallback onBackup;
@@ -1288,6 +1290,12 @@ class SettingsSheet extends StatelessWidget {
             title: const Text('앱 잠금'),
             value: settings.lockEnabled,
             onChanged: onToggleLock,
+          ),
+          SwitchListTile(
+            title: const Text('지문 인식 잠금해제'),
+            subtitle: const Text('지문 및 생체 인식을 사용하여 잠금을 해제합니다.'),
+            value: settings.biometricEnabled,
+            onChanged: settings.lockEnabled ? onToggleBiometric : null,
           ),
           ListTile(
             leading: const Icon(Icons.pin),

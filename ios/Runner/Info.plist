@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>지문 및 생체 인식을 사용하여 안전하게 앱 잠금을 해제합니다.</string>
 </dict>
 </plist>

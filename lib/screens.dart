@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
@@ -463,63 +464,97 @@ class _FlowShellState extends State<FlowShell> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       showDragHandle: true,
-      builder: (ctx) => SettingsSheet(
-        settings: widget.store.settings,
-        onToggleTheme: (v) {
-          triggerInteractionHaptic(widget.store.settings);
-          Navigator.pop(ctx);
-          widget.store.settings = widget.store.settings.copyWith(darkMode: v);
-          widget.onStoreChanged();
-        },
-        onToggleLock: (v) async {
-          triggerInteractionHaptic(widget.store.settings);
-          if (v && widget.store.settings.pinCode.isEmpty) {
-            Navigator.pop(ctx);
-            final pin = await _showPinDialog(title: 'PIN 설정');
-            if (pin != null) {
-              widget.store.settings = widget.store.settings.copyWith(
-                lockEnabled: true,
-                pinCode: pin,
-              );
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return SettingsSheet(
+            settings: widget.store.settings,
+            onToggleTheme: (v) {
+              triggerInteractionHaptic(widget.store.settings);
+              widget.store.settings = widget.store.settings.copyWith(darkMode: v);
+              widget.onStoreChanged();
+              setSheetState(() {});
+            },
+            onToggleLock: (v) async {
+              triggerInteractionHaptic(widget.store.settings);
+              if (v && widget.store.settings.pinCode.isEmpty) {
+                Navigator.pop(ctx);
+                final pin = await _showPinDialog(title: 'PIN 설정');
+                if (pin != null) {
+                  widget.store.settings = widget.store.settings.copyWith(
+                    lockEnabled: true,
+                    pinCode: pin,
+                  );
+                  await widget.onStoreChanged();
+                }
+              } else {
+                widget.store.settings = widget.store.settings.copyWith(
+                  lockEnabled: v,
+                  biometricEnabled: v ? widget.store.settings.biometricEnabled : false,
+                );
+                await widget.onStoreChanged();
+                setSheetState(() {});
+              }
+            },
+            onToggleBiometric: (v) async {
+              triggerInteractionHaptic(widget.store.settings);
+              if (v) {
+                final localAuth = LocalAuthentication();
+                try {
+                  final isSupported = await localAuth.isDeviceSupported();
+                  final canCheck = await localAuth.canCheckBiometrics;
+                  if (!isSupported || !canCheck) {
+                    _showMessage('이 기기는 지문 및 생체 인증을 지원하지 않거나 설정되어 있지 않습니다.');
+                    return;
+                  }
+                  final authenticated = await localAuth.authenticate(
+                    localizedReason: '지문 인식 잠금해제를 설정하기 위해 인증해주세요.',
+                    biometricOnly: true,
+                    persistAcrossBackgrounding: true,
+                  );
+                  if (!authenticated) {
+                    return;
+                  }
+                } catch (e) {
+                  _showMessage('생체 인증 설정 중 오류가 발생했습니다: $e');
+                  return;
+                }
+              }
+              widget.store.settings = widget.store.settings.copyWith(biometricEnabled: v);
               await widget.onStoreChanged();
-            }
-          } else {
-            Navigator.pop(ctx);
-            widget.store.settings = widget.store.settings.copyWith(
-              lockEnabled: v,
-            );
-            await widget.onStoreChanged();
-          }
-        },
-        onChangePin: () async {
-          triggerInteractionHaptic(widget.store.settings);
-          Navigator.pop(ctx);
-          final pin = await _showPinDialog(title: 'PIN 변경');
-          if (pin != null) {
-            widget.store.settings = widget.store.settings.copyWith(
-              pinCode: pin,
-            );
-            await widget.onStoreChanged();
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('PIN이 변경되었습니다.')));
-            }
-          }
-        },
-        onLockNow: () {
-          triggerInteractionHaptic(widget.store.settings);
-          Navigator.pop(ctx);
-          widget.onRequireRelock();
-        },
-        onBackup: _handleBackup,
-        onRestore: _handleRestore,
-        onToggleHaptic: (v) {
-          if (v) {
-            HapticFeedback.lightImpact();
-          }
-          widget.store.settings = widget.store.settings.copyWith(hapticEnabled: v);
-          widget.onStoreChanged();
+              setSheetState(() {});
+            },
+            onChangePin: () async {
+              triggerInteractionHaptic(widget.store.settings);
+              Navigator.pop(ctx);
+              final pin = await _showPinDialog(title: 'PIN 변경');
+              if (pin != null) {
+                widget.store.settings = widget.store.settings.copyWith(
+                  pinCode: pin,
+                );
+                await widget.onStoreChanged();
+                if (mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('PIN이 변경되었습니다.')));
+                }
+              }
+            },
+            onLockNow: () {
+              triggerInteractionHaptic(widget.store.settings);
+              Navigator.pop(ctx);
+              widget.onRequireRelock();
+            },
+            onBackup: _handleBackup,
+            onRestore: _handleRestore,
+            onToggleHaptic: (v) {
+              if (v) {
+                HapticFeedback.lightImpact();
+              }
+              widget.store.settings = widget.store.settings.copyWith(hapticEnabled: v);
+              widget.onStoreChanged();
+              setSheetState(() {});
+            },
+          );
         },
       ),
     );
@@ -1016,7 +1051,13 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
         curve: const ShakeCurve(count: 3.0),
       ),
     );
-    _loadLockoutState();
+    _loadLockoutState().then((_) {
+      if (widget.settings.lockEnabled && widget.settings.biometricEnabled && _lockoutSecondsRemaining == 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _authenticateWithBiometrics();
+        });
+      }
+    });
   }
 
   @override
@@ -1106,6 +1147,49 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
     _lockoutSecondsRemaining = 0;
     await prefs.remove('lockscreen_failed_attempts');
     await prefs.remove('lockscreen_lockout_until');
+  }
+
+  Future<void> _authenticateWithBiometrics({bool isManual = false}) async {
+    if (_isUnlocking || _lockoutSecondsRemaining > 0 || _loadingState) return;
+
+    final localAuth = LocalAuthentication();
+    try {
+      final isSupported = await localAuth.isDeviceSupported();
+      final canCheck = await localAuth.canCheckBiometrics;
+      if (!isSupported || !canCheck) {
+        if (isManual) {
+          setState(() {
+            _error = '생체 인증을 사용할 수 없거나 설정되어 있지 않습니다.';
+          });
+        }
+        return;
+      }
+
+      final authenticated = await localAuth.authenticate(
+        localizedReason: '앱 잠금을 해제하려면 생체 인증을 해주세요.',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+
+      if (authenticated) {
+        if (!mounted) return;
+        setState(() {
+          _error = null;
+          _isUnlocking = true;
+        });
+        await _clearFailedAttempts();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          widget.onUnlock();
+        });
+      }
+    } catch (e) {
+      if (isManual) {
+        setState(() {
+          _error = '생체 인증 중 오류가 발생했습니다: $e';
+        });
+      }
+    }
   }
 
   Future<void> _check() async {
@@ -1201,6 +1285,16 @@ class _LockScreenState extends State<LockScreen> with SingleTickerProviderStateM
                             counterText: '',
                             prefixIcon: isLockedOut
                                 ? const Icon(Icons.timer, color: Colors.redAccent)
+                                : null,
+                            suffixIcon: (widget.settings.biometricEnabled && !isLockedOut)
+                                ? IconButton(
+                                    icon: Icon(
+                                      Icons.fingerprint,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                    onPressed: () => _authenticateWithBiometrics(isManual: true),
+                                    tooltip: '생체 인증 사용',
+                                  )
                                 : null,
                           ),
                           onSubmitted: (_) => _check(),
