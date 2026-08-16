@@ -232,9 +232,12 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: .82,
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * .82,
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               title: Text(
@@ -250,9 +253,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const Divider(height: 1),
-            Expanded(
+            Flexible(
               child: ListView(
                 key: const ValueKey('prompt-action-list'),
+                shrinkWrap: true,
                 padding: const EdgeInsets.only(bottom: 20),
                 children: [
                   ListTile(

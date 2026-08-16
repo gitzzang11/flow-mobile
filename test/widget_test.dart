@@ -112,6 +112,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('프롬프트 설정창은 내용 높이만큼만 열린다', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(FlowApp(pinStore: MemoryPinCredentialStore()));
+    await tester.pumpAndSettle();
+
+    final moreButton = find.byTooltip('더보기').first;
+    await tester.ensureVisible(moreButton);
+    await tester.tap(moreButton);
+    await tester.pumpAndSettle();
+
+    final sheet = find.byType(BottomSheet).last;
+    expect(tester.getSize(sheet).height, lessThan(620));
+    expect(find.text('클립보드에 복사'), findsOneWidget);
+  });
+
   testWidgets('설정 화면을 전체 화면으로 연다', (tester) async {
     await tester.pumpWidget(FlowApp(pinStore: MemoryPinCredentialStore()));
     await tester.pumpAndSettle();
