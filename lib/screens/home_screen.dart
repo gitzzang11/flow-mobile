@@ -229,9 +229,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showActions(PromptItem prompt) async {
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Wrap(
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: .82,
+        child: Column(
           children: [
             ListTile(
               title: Text(
@@ -240,72 +243,88 @@ class _HomeScreenState extends State<HomeScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy_rounded),
-              title: const Text('클립보드에 복사'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _copy(prompt);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.ios_share_rounded),
-              title: const Text('공유'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _share(prompt);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('편집'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _openEditor(prompt);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                prompt.isPinned
-                    ? Icons.push_pin_outlined
-                    : Icons.push_pin_rounded,
+              trailing: IconButton(
+                tooltip: '닫기',
+                onPressed: () => Navigator.pop(sheetContext),
+                icon: const Icon(Icons.close_rounded),
               ),
-              title: Text(prompt.isPinned ? '상단 고정 해제' : '상단 고정'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _togglePin(prompt);
-              },
             ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_move_outline),
-              title: const Text('다른 폴더로 이동'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _move(prompt);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('복제'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _duplicate(prompt);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error,
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                key: const ValueKey('prompt-action-list'),
+                padding: const EdgeInsets.only(bottom: 20),
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.copy_rounded),
+                    title: const Text('클립보드에 복사'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _copy(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.ios_share_rounded),
+                    title: const Text('공유'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _share(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('편집'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _openEditor(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      prompt.isPinned
+                          ? Icons.push_pin_outlined
+                          : Icons.push_pin_rounded,
+                    ),
+                    title: Text(prompt.isPinned ? '상단 고정 해제' : '상단 고정'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _togglePin(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.drive_file_move_outline),
+                    title: const Text('다른 폴더로 이동'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _move(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.copy_all_outlined),
+                    title: const Text('복제'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _duplicate(prompt);
+                    },
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      '삭제',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _delete(prompt);
+                    },
+                  ),
+                ],
               ),
-              title: Text(
-                '삭제',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _delete(prompt);
-              },
             ),
           ],
         ),

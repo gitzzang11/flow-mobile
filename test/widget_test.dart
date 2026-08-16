@@ -58,10 +58,12 @@ void main() {
       await tester.pump();
     }
     final lastField = find.byKey(const ValueKey('prompt-segment-field-4'));
-    final editorScrollable = find.descendant(
-      of: find.byKey(const ValueKey('prompt-editor-list')),
-      matching: find.byType(Scrollable),
-    ).first;
+    final editorScrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('prompt-editor-list')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
     await tester.scrollUntilVisible(
       lastField,
       180,
@@ -75,6 +77,38 @@ void main() {
 
     expect(lastField, findsOneWidget);
     expect(find.byKey(const ValueKey('save-prompt-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('작은 화면에서 프롬프트 설정창의 모든 메뉴를 스크롤한다', (tester) async {
+    tester.view.physicalSize = const Size(360, 320);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(FlowApp(pinStore: MemoryPinCredentialStore()));
+    await tester.pumpAndSettle();
+
+    final moreButton = find.byTooltip('더보기').first;
+    await tester.ensureVisible(moreButton);
+    await tester.tap(moreButton);
+    await tester.pumpAndSettle();
+
+    final actionList = find.byKey(const ValueKey('prompt-action-list'));
+    expect(actionList, findsOneWidget);
+    expect(find.text('클립보드에 복사'), findsOneWidget);
+    final actionScrollable = find
+        .descendant(of: actionList, matching: find.byType(Scrollable))
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('삭제'),
+      100,
+      scrollable: actionScrollable,
+    );
+    await tester.pump();
+
+    expect(find.text('삭제'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
