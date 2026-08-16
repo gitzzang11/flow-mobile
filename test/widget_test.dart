@@ -39,6 +39,45 @@ void main() {
     expect(find.byKey(const ValueKey('save-prompt-button')), findsOneWidget);
   });
 
+  testWidgets('작은 가로 화면에서도 편집기의 마지막 내용까지 스크롤한다', (tester) async {
+    tester.view.physicalSize = const Size(568, 320);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(FlowApp(pinStore: MemoryPinCredentialStore()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('new-prompt-button')));
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < 4; i++) {
+      await tester.ensureVisible(find.text('구간 추가'));
+      await tester.pump();
+      await tester.tap(find.text('구간 추가'));
+      await tester.pump();
+    }
+    final lastField = find.byKey(const ValueKey('prompt-segment-field-4'));
+    final editorScrollable = find.descendant(
+      of: find.byKey(const ValueKey('prompt-editor-list')),
+      matching: find.byType(Scrollable),
+    ).first;
+    await tester.scrollUntilVisible(
+      lastField,
+      180,
+      scrollable: editorScrollable,
+    );
+    await tester.drag(editorScrollable, const Offset(0, -160));
+    await tester.pump();
+    await tester.tap(lastField);
+    await tester.enterText(lastField, '화면 아래쪽의 긴 프롬프트 내용');
+    await tester.pump();
+
+    expect(lastField, findsOneWidget);
+    expect(find.byKey(const ValueKey('save-prompt-button')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('설정 화면을 전체 화면으로 연다', (tester) async {
     await tester.pumpWidget(FlowApp(pinStore: MemoryPinCredentialStore()));
     await tester.pumpAndSettle();

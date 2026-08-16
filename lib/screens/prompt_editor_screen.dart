@@ -158,6 +158,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       },
       child: Scaffold(
         key: const ValueKey('prompt-editor-screen'),
+        resizeToAvoidBottomInset: true,
         appBar: AppBar(
           leading: IconButton(
             tooltip: '닫기',
@@ -184,8 +185,15 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
+              key: const ValueKey('prompt-editor-list'),
+              physics: const AlwaysScrollableScrollPhysics(),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                12,
+                16,
+                MediaQuery.viewInsetsOf(context).bottom > 0 ? 120 : 88,
+              ),
               children: [
                 TextFormField(
                   key: const ValueKey('prompt-title-field'),
@@ -253,6 +261,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                 ),
                 for (var index = 0; index < _segments.length; index++)
                   Card(
+                    key: ValueKey('prompt-segment-card-$index'),
                     margin: const EdgeInsets.only(top: 10),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -312,6 +321,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                             ],
                           ),
                           TextField(
+                            key: ValueKey('prompt-segment-field-$index'),
                             controller: _segments[index],
                             minLines: 4,
                             maxLines: null,
@@ -380,83 +390,89 @@ class _MobileColorPickerState extends State<_MobileColorPicker> {
       ...AppPalette.values.map((item) => item.value),
       ...widget.favoriteColors,
     }.toList();
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final availableHeight = MediaQuery.sizeOf(context).height - keyboardInset;
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          0,
-          20,
-          MediaQuery.viewInsetsOf(context).bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '색상 선택',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: colors
-                  .map(
-                    (color) => InkWell(
-                      onTap: () => setState(() {
-                        _selected = color;
-                        _hex.text = color
-                            .toRadixString(16)
-                            .substring(2)
-                            .toUpperCase();
-                      }),
-                      borderRadius: BorderRadius.circular(28),
-                      child: Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: Color(color),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _selected == color
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Colors.transparent,
-                            width: 3,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: availableHeight * .85),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '색상 선택',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: colors
+                      .map(
+                        (color) => InkWell(
+                          onTap: () => setState(() {
+                            _selected = color;
+                            _hex.text = color
+                                .toRadixString(16)
+                                .substring(2)
+                                .toUpperCase();
+                          }),
+                          borderRadius: BorderRadius.circular(28),
+                          child: Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Color(color),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _selected == color
+                                    ? Theme.of(context).colorScheme.onSurface
+                                    : Colors.transparent,
+                                width: 3,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _hex,
-              maxLength: 6,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp('[0-9a-fA-F]')),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: _hex,
+                  maxLength: 6,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp('[0-9a-fA-F]')),
+                  ],
+                  onChanged: _parseHex,
+                  decoration: InputDecoration(
+                    labelText: 'HEX',
+                    prefixText: '#',
+                    errorText: _error,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _error == null
+                        ? () => Navigator.pop(context, _selected)
+                        : null,
+                    child: const Text('적용'),
+                  ),
+                ),
               ],
-              onChanged: _parseHex,
-              decoration: InputDecoration(
-                labelText: 'HEX',
-                prefixText: '#',
-                errorText: _error,
-              ),
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _error == null
-                    ? () => Navigator.pop(context, _selected)
-                    : null,
-                child: const Text('적용'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
