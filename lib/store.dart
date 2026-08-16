@@ -8,82 +8,146 @@ class PromptStore {
     required this.folders,
     required this.settings,
   });
-
-  static const _storageKey = 'flow_store_v1';
-  static const backupVersion = 1;
-
+  static const storageKey = 'flow_store_v1';
+  static const backupVersion = 2;
   List<PromptItem> prompts;
   List<FolderItem> folders;
   AppSettings settings;
 
   static Future<PromptStore> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_storageKey);
-
-    if (raw == null || raw.isEmpty) {
-      return PromptStore(
-        prompts: [],
-        folders: [],
-        settings: const AppSettings(),
-      );
+    final raw = (await SharedPreferences.getInstance()).getString(storageKey);
+    if (raw == null || raw.isEmpty) return PromptStore.empty();
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map
+          ? PromptStore.fromJson(decoded.cast<String, dynamic>())
+          : PromptStore.empty();
+    } on Object {
+      return PromptStore.empty();
     }
-
-    final json = jsonDecode(raw) as Map<String, dynamic>;
-    return PromptStore(
-      prompts: (json['prompts'] as List<dynamic>? ?? [])
-          .map((item) => PromptItem.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      folders: (json['folders'] as List<dynamic>? ?? [])
-          .map((item) => FolderItem.fromJson(item as Map<String, dynamic>))
-          .toList(),
-      settings: AppSettings.fromJson(
-        json['settings'] as Map<String, dynamic>? ?? const {},
-      ),
-    );
   }
 
-  Future<void> persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, exportToJson());
-  }
+  factory PromptStore.empty() =>
+      PromptStore(prompts: [], folders: [], settings: const AppSettings());
+  factory PromptStore.fromJson(Map<String, dynamic> json) => PromptStore(
+    prompts: _readPrompts(json['prompts']),
+    folders: _readFolders(json['folders']),
+    settings: AppSettings.fromJson(
+      json['settings'] is Map
+          ? (json['settings'] as Map).cast<String, dynamic>()
+          : const {},
+    ),
+  );
 
+  static List<PromptItem> _readPrompts(dynamic value) => value is List
+      ? value
+            .whereType<Map>()
+            .map((item) => PromptItem.fromJson(item.cast<String, dynamic>()))
+            .where((item) => item.id.isNotEmpty && item.title.isNotEmpty)
+            .toList()
+      : [];
+  static List<FolderItem> _readFolders(dynamic value) => value is List
+      ? value
+            .whereType<Map>()
+            .map((item) => FolderItem.fromJson(item.cast<String, dynamic>()))
+            .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+            .toList()
+      : [];
+
+  Future<void> persist() async => (await SharedPreferences.getInstance())
+      .setString(storageKey, exportToJson());
   static String newId() => DateTime.now().microsecondsSinceEpoch.toString();
+  String exportToJson() => jsonEncode({
+    'version': backupVersion,
+    'exportedAt': DateTime.now().toIso8601String(),
+    'prompts': prompts.map((item) => item.toJson()).toList(),
+    'folders': folders.map((item) => item.toJson()).toList(),
+    'settings': settings.toJson(),
+  });
 
-  String exportToJson() {
-    return jsonEncode({
-      'version': backupVersion,
-      'exportedAt': DateTime.now().toIso8601String(),
-      'prompts': prompts.map((item) => item.toJson()).toList(),
-      'folders': folders.map((item) => item.toJson()).toList(),
-      'settings': settings.toJson(),
-    });
-  }
-
-  void importFromJsonString(String rawJson) {
-    final json = jsonDecode(rawJson);
-    if (json is! Map<String, dynamic>) {
+  void importFromJsonString(
+    String rawJson, {
+    bool preserveDeviceSecurity = true,
+  }) {
+    final decoded = jsonDecode(rawJson);
+    if (decoded is! Map) {
       throw const FormatException('Backup root must be a JSON object.');
     }
-
-    final promptsJson = json['prompts'];
-    final foldersJson = json['folders'];
-    final settingsJson = json['settings'];
-
-    if (promptsJson is! List || foldersJson is! List) {
+    final json = decoded.cast<String, dynamic>();
+    final version = (json['version'] as num?)?.toInt() ?? 1;
+    if (version < 1 || version > backupVersion) {
+      throw const FormatException('Unsupported backup version.');
+    }
+    if (json['prompts'] is! List || json['folders'] is! List) {
       throw const FormatException('Backup is missing prompt or folder lists.');
     }
-    if (settingsJson != null && settingsJson is! Map<String, dynamic>) {
-      throw const FormatException('Backup settings format is invalid.');
+    final imported = PromptStore.fromJson(json);
+    final ids = <String>{};
+    for (final prompt in imported.prompts) {
+      if (!ids.add(prompt.id)) {
+        throw const FormatException('Backup contains duplicate prompt IDs.');
+      }
     }
+    final folderIds = imported.folders.map((item) => item.id).toSet();
+    prompts = imported.prompts
+        .map(
+          (item) => folderIds.contains(item.folderId)
+              ? item
+              : item.copyWith(folderId: ''),
+        )
+        .toList();
+    folders = imported.folders;
+    settings = preserveDeviceSecurity
+        ? imported.settings.copyWith(
+            lockEnabled: settings.lockEnabled,
+            biometricEnabled: settings.biometricEnabled,
+            autoLockDuration: settings.autoLockDuration,
+            legacyPinCode: settings.legacyPinCode,
+          )
+        : imported.settings.copyWith(
+            lockEnabled: false,
+            biometricEnabled: false,
+            legacyPinCode: '',
+          );
+  }
 
-    prompts = promptsJson
-        .map((item) => PromptItem.fromJson(item as Map<String, dynamic>))
+  Future<void> savePrompt(PromptItem prompt) async {
+    final index = prompts.indexWhere((item) => item.id == prompt.id);
+    if (index < 0) {
+      prompts.add(prompt);
+    } else {
+      prompts[index] = prompt;
+    }
+    await persist();
+  }
+
+  Future<int> deletePrompt(String id) async {
+    final index = prompts.indexWhere((item) => item.id == id);
+    if (index >= 0) {
+      prompts.removeAt(index);
+      await persist();
+    }
+    return index;
+  }
+
+  Future<void> restorePrompt(PromptItem prompt, int index) async {
+    if (prompts.any((item) => item.id == prompt.id)) return;
+    prompts.insert(index.clamp(0, prompts.length), prompt);
+    await persist();
+  }
+
+  Future<void> deleteFolder(String id) async {
+    folders.removeWhere((item) => item.id == id);
+    prompts = prompts
+        .map((item) => item.folderId == id ? item.copyWith(folderId: '') : item)
         .toList();
-    folders = foldersJson
-        .map((item) => FolderItem.fromJson(item as Map<String, dynamic>))
-        .toList();
-    settings = AppSettings.fromJson(
-      settingsJson as Map<String, dynamic>? ?? const {},
-    );
+    await persist();
+  }
+
+  Future<void> reorderFolders(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = folders.removeAt(oldIndex);
+    folders.insert(newIndex, item);
+    await persist();
   }
 }

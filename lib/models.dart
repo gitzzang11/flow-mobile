@@ -13,40 +13,37 @@ enum AppPalette {
 }
 
 enum PromptSortMode {
-  newest('newest'),
-  oldest('oldest'),
-  title('title');
+  newest('newest', '최신순'),
+  oldest('oldest', '오래된순'),
+  title('title', '이름순');
 
-  const PromptSortMode(this.storageValue);
-
+  const PromptSortMode(this.storageValue, this.label);
   final String storageValue;
-
-  static PromptSortMode fromStorage(String? value) {
-    return PromptSortMode.values.firstWhere(
-      (mode) => mode.storageValue == value,
-      orElse: () => PromptSortMode.newest,
-    );
-  }
+  final String label;
+  static PromptSortMode fromStorage(String? value) => values.firstWhere(
+    (mode) => mode.storageValue == value,
+    orElse: () => PromptSortMode.newest,
+  );
 }
 
-enum PromptViewMode {
-  list('list'),
-  grid('grid');
+enum AutoLockDuration {
+  immediately('immediately', '즉시', Duration.zero),
+  oneMinute('one_minute', '1분 후', Duration(minutes: 1)),
+  fiveMinutes('five_minutes', '5분 후', Duration(minutes: 5)),
+  never('never', '잠그지 않음', null);
 
-  const PromptViewMode(this.storageValue);
-
+  const AutoLockDuration(this.storageValue, this.label, this.duration);
   final String storageValue;
-
-  static PromptViewMode fromStorage(String? value) {
-    return PromptViewMode.values.firstWhere(
-      (mode) => mode.storageValue == value,
-      orElse: () => PromptViewMode.list,
-    );
-  }
+  final String label;
+  final Duration? duration;
+  static AutoLockDuration fromStorage(String? value) => values.firstWhere(
+    (item) => item.storageValue == value,
+    orElse: () => AutoLockDuration.oneMinute,
+  );
 }
 
 class PromptItem {
-  PromptItem({
+  const PromptItem({
     required this.id,
     required this.title,
     required this.titleColorValue,
@@ -57,7 +54,6 @@ class PromptItem {
     required this.segments,
     this.isPinned = false,
   });
-
   final String id;
   final String title;
   final int titleColorValue;
@@ -67,7 +63,6 @@ class PromptItem {
   final DateTime updatedAt;
   final List<PromptSegment> segments;
   final bool isPinned;
-
   String get plainText => segments.map((segment) => segment.text).join();
 
   PromptItem copyWith({
@@ -80,32 +75,42 @@ class PromptItem {
     DateTime? updatedAt,
     List<PromptSegment>? segments,
     bool? isPinned,
-  }) {
-    return PromptItem(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      titleColorValue: titleColorValue ?? this.titleColorValue,
-      folderId: folderId ?? this.folderId,
-      tags: tags ?? this.tags,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      segments: segments ?? this.segments,
-      isPinned: isPinned ?? this.isPinned,
-    );
-  }
+  }) => PromptItem(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    titleColorValue: titleColorValue ?? this.titleColorValue,
+    folderId: folderId ?? this.folderId,
+    tags: tags ?? this.tags,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    segments: segments ?? this.segments,
+    isPinned: isPinned ?? this.isPinned,
+  );
 
   factory PromptItem.fromJson(Map<String, dynamic> json) {
+    DateTime date(String key) =>
+        DateTime.tryParse(json[key]?.toString() ?? '') ?? DateTime.now();
+    final rawSegments = json['segments'];
     return PromptItem(
-      id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      titleColorValue: json['titleColorValue'] as int? ?? AppPalette.ink.value,
-      folderId: json['folderId'] as String? ?? '',
-      tags: (json['tags'] as List<dynamic>? ?? []).cast<String>(),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-      segments: (json['segments'] as List<dynamic>? ?? [])
-          .map((item) => PromptSegment.fromJson(item as Map<String, dynamic>))
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      titleColorValue:
+          (json['titleColorValue'] as num?)?.toInt() ?? AppPalette.ink.value,
+      folderId: json['folderId']?.toString() ?? '',
+      tags: (json['tags'] as List<dynamic>? ?? const [])
+          .map((tag) => tag.toString())
           .toList(),
+      createdAt: date('createdAt'),
+      updatedAt: date('updatedAt'),
+      segments: rawSegments is List
+          ? rawSegments
+                .whereType<Map>()
+                .map(
+                  (item) =>
+                      PromptSegment.fromJson(item.cast<String, dynamic>()),
+                )
+                .toList()
+          : const [],
       isPinned: json['isPinned'] as bool? ?? false,
     );
   }
@@ -124,52 +129,42 @@ class PromptItem {
 }
 
 class PromptSegment {
-  PromptSegment({required this.text, required this.colorValue});
-
+  const PromptSegment({required this.text, required this.colorValue});
   final String text;
   final int colorValue;
-
-  PromptSegment copyWith({String? text, int? colorValue}) {
-    return PromptSegment(
-      text: text ?? this.text,
-      colorValue: colorValue ?? this.colorValue,
-    );
-  }
-
-  factory PromptSegment.fromJson(Map<String, dynamic> json) {
-    return PromptSegment(
-      text: json['text'] as String? ?? '',
-      colorValue: json['colorValue'] as int? ?? AppPalette.ink.value,
-    );
-  }
-
+  PromptSegment copyWith({String? text, int? colorValue}) => PromptSegment(
+    text: text ?? this.text,
+    colorValue: colorValue ?? this.colorValue,
+  );
+  factory PromptSegment.fromJson(Map<String, dynamic> json) => PromptSegment(
+    text: json['text']?.toString() ?? '',
+    colorValue: (json['colorValue'] as num?)?.toInt() ?? AppPalette.ink.value,
+  );
   Map<String, dynamic> toJson() => {'text': text, 'colorValue': colorValue};
 }
 
 class FolderItem {
-  FolderItem({required this.id, required this.name, required this.createdAt});
-
+  const FolderItem({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+  });
   final String id;
   final String name;
   final DateTime createdAt;
-
-  FolderItem copyWith({String? id, String? name, DateTime? createdAt}) {
-    return FolderItem(
-      // Added const for better performance
-      id: id ?? this.id,
-      name: name ?? this.name,
-      createdAt: createdAt ?? this.createdAt,
-    );
-  }
-
-  factory FolderItem.fromJson(Map<String, dynamic> json) {
-    return FolderItem(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      createdAt: DateTime.parse(json['createdAt'] as String),
-    );
-  }
-
+  FolderItem copyWith({String? id, String? name, DateTime? createdAt}) =>
+      FolderItem(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  factory FolderItem.fromJson(Map<String, dynamic> json) => FolderItem(
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    createdAt:
+        DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+        DateTime.now(),
+  );
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -181,83 +176,91 @@ class AppSettings {
   const AppSettings({
     this.darkMode = false,
     this.lockEnabled = false,
-    this.pinCode = '',
     this.favoriteColors = const [],
     this.promptSortMode = PromptSortMode.newest,
-    this.promptViewMode = PromptViewMode.grid,
     this.customPromptOrder = const [],
     this.hapticEnabled = true,
     this.biometricEnabled = false,
+    this.showFolderNavigation = true,
+    this.autoLockDuration = AutoLockDuration.oneMinute,
+    this.cardTextScale = 1,
+    this.legacyPinCode = '',
   });
-
   final bool darkMode;
   final bool lockEnabled;
-  final String pinCode;
   final List<int> favoriteColors;
   final PromptSortMode promptSortMode;
-  final PromptViewMode promptViewMode;
   final List<String> customPromptOrder;
   final bool hapticEnabled;
   final bool biometricEnabled;
+  final bool showFolderNavigation;
+  final AutoLockDuration autoLockDuration;
+  final double cardTextScale;
+  final String legacyPinCode;
 
   AppSettings copyWith({
     bool? darkMode,
     bool? lockEnabled,
-    String? pinCode,
     List<int>? favoriteColors,
     PromptSortMode? promptSortMode,
-    PromptViewMode? promptViewMode,
     List<String>? customPromptOrder,
     bool? hapticEnabled,
     bool? biometricEnabled,
-  }) {
-    return AppSettings(
-      darkMode: darkMode ?? this.darkMode,
-      lockEnabled: lockEnabled ?? this.lockEnabled,
-      pinCode: pinCode ?? this.pinCode,
-      favoriteColors: favoriteColors ?? this.favoriteColors,
-      promptSortMode: promptSortMode ?? this.promptSortMode,
-      promptViewMode: promptViewMode ?? this.promptViewMode,
-      customPromptOrder: customPromptOrder ?? this.customPromptOrder,
-      hapticEnabled: hapticEnabled ?? this.hapticEnabled,
-      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
-    );
-  }
+    bool? showFolderNavigation,
+    AutoLockDuration? autoLockDuration,
+    double? cardTextScale,
+    String? legacyPinCode,
+  }) => AppSettings(
+    darkMode: darkMode ?? this.darkMode,
+    lockEnabled: lockEnabled ?? this.lockEnabled,
+    favoriteColors: favoriteColors ?? this.favoriteColors,
+    promptSortMode: promptSortMode ?? this.promptSortMode,
+    customPromptOrder: customPromptOrder ?? this.customPromptOrder,
+    hapticEnabled: hapticEnabled ?? this.hapticEnabled,
+    biometricEnabled: biometricEnabled ?? this.biometricEnabled,
+    showFolderNavigation: showFolderNavigation ?? this.showFolderNavigation,
+    autoLockDuration: autoLockDuration ?? this.autoLockDuration,
+    cardTextScale: cardTextScale ?? this.cardTextScale,
+    legacyPinCode: legacyPinCode ?? this.legacyPinCode,
+  );
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
     darkMode: json['darkMode'] as bool? ?? false,
     lockEnabled: json['lockEnabled'] as bool? ?? false,
-    pinCode: json['pinCode'] as String? ?? '',
-    favoriteColors: (json['favoriteColors'] as List<dynamic>? ?? [])
-        .cast<int>(),
+    favoriteColors: (json['favoriteColors'] as List<dynamic>? ?? const [])
+        .whereType<num>()
+        .map((value) => value.toInt())
+        .toList(),
     promptSortMode: PromptSortMode.fromStorage(
       json['promptSortMode'] as String?,
     ),
-    promptViewMode: PromptViewMode.fromStorage(
-      json['promptViewMode'] as String?,
-    ),
-    customPromptOrder: (json['customPromptOrder'] as List<dynamic>? ?? [])
-        .cast<String>(),
+    customPromptOrder: (json['customPromptOrder'] as List<dynamic>? ?? const [])
+        .map((value) => value.toString())
+        .toList(),
     hapticEnabled: json['hapticEnabled'] as bool? ?? true,
     biometricEnabled: json['biometricEnabled'] as bool? ?? false,
+    showFolderNavigation: json['showFolderNavigation'] as bool? ?? true,
+    autoLockDuration: AutoLockDuration.fromStorage(
+      json['autoLockDuration'] as String?,
+    ),
+    cardTextScale: (json['cardTextScale'] as num?)?.toDouble() ?? 1,
+    legacyPinCode: json['pinCode']?.toString() ?? '',
   );
 
   Map<String, dynamic> toJson() => {
     'darkMode': darkMode,
     'lockEnabled': lockEnabled,
-    'pinCode': pinCode,
     'favoriteColors': favoriteColors,
     'promptSortMode': promptSortMode.storageValue,
-    'promptViewMode': promptViewMode.storageValue,
     'customPromptOrder': customPromptOrder,
     'hapticEnabled': hapticEnabled,
     'biometricEnabled': biometricEnabled,
+    'showFolderNavigation': showFolderNavigation,
+    'autoLockDuration': autoLockDuration.storageValue,
+    'cardTextScale': cardTextScale,
   };
 }
 
 void triggerInteractionHaptic(AppSettings settings) {
-  if (settings.hapticEnabled) {
-    HapticFeedback.lightImpact();
-  }
+  if (settings.hapticEnabled) HapticFeedback.lightImpact();
 }
-
