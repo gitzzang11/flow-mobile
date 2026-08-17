@@ -55,7 +55,6 @@ class PromptCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 15 * textScale,
                           fontWeight: FontWeight.w700,
-                          color: Color(prompt.titleColorValue),
                         ),
                       ),
                     ),

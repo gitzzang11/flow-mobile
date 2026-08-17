@@ -38,7 +38,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
   late final TextEditingController _tags;
   late final List<TextEditingController> _segments;
   late final List<int> _colors;
-  late int _titleColor;
   late final List<String> _imagePaths;
   late String _folderId;
   late String _initialSignature;
@@ -57,7 +56,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     _title = TextEditingController(text: prompt?.title ?? '');
     _tags = TextEditingController(text: prompt?.tags.join(', ') ?? '');
     _folderId = prompt?.folderId ?? widget.initialFolderId;
-    _titleColor = prompt?.titleColorValue ?? _defaultColor;
     _imagePaths = [...?prompt?.imagePaths];
     final source = prompt?.segments.isNotEmpty == true
         ? prompt!.segments
@@ -74,7 +72,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     _title.text,
     _tags.text,
     _folderId,
-    _titleColor,
     ..._imagePaths,
     for (var i = 0; i < _segments.length; i++)
       '${_colors[i]}:${_segments[i].text}',
@@ -143,7 +140,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       PromptItem(
         id: existing?.id ?? PromptStore.newId(),
         title: _title.text.trim(),
-        titleColorValue: _titleColor,
+        titleColorValue: existing?.titleColorValue ?? _defaultColor,
         folderId: _folderId,
         tags: _parseTags(),
         createdAt: existing?.createdAt ?? now,
@@ -172,11 +169,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       favoriteColors: widget.settings.favoriteColors,
     ),
   );
-
-  Future<void> _pickTitleColor() async {
-    final result = await _showColorPicker(_titleColor);
-    if (result != null) setState(() => _titleColor = result);
-  }
 
   Future<void> _addImages(bool camera) async {
     Navigator.pop(context);
@@ -311,18 +303,6 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                   ),
                   validator: (value) =>
                       value?.trim().isEmpty == true ? '제목을 입력하세요.' : null,
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    key: const ValueKey('prompt-title-color-button'),
-                    onPressed: _pickTitleColor,
-                    icon: CircleAvatar(
-                      radius: 9,
-                      backgroundColor: Color(_titleColor),
-                    ),
-                    label: const Text('제목 색상'),
-                  ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(

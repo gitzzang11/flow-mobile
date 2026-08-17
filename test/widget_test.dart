@@ -42,10 +42,7 @@ void main() {
     expect(find.byKey(const ValueKey('prompt-editor-screen')), findsOneWidget);
     expect(find.byKey(const ValueKey('prompt-title-field')), findsOneWidget);
     expect(find.byKey(const ValueKey('save-prompt-button')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('prompt-title-color-button')),
-      findsOneWidget,
-    );
+    expect(find.text('제목 색상'), findsNothing);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('add-image-button')),
       180,
@@ -59,7 +56,7 @@ void main() {
     expect(find.byKey(const ValueKey('add-image-button')), findsOneWidget);
   });
 
-  testWidgets('카드에 제목색과 구간별 글자색을 표시한다', (tester) async {
+  testWidgets('카드 제목은 테마 색상을 사용하고 본문 구간별 색상을 표시한다', (tester) async {
     final now = DateTime.now();
     final prompt = PromptItem(
       id: 'colored',
@@ -92,10 +89,7 @@ void main() {
       ),
     );
 
-    expect(
-      tester.widget<Text>(find.text('색상 카드')).style?.color,
-      const Color(0xFFE85D5D),
-    );
+    expect(tester.widget<Text>(find.text('색상 카드')).style?.color, isNull);
     final richText = tester.widget<RichText>(
       find.byKey(const ValueKey('prompt-card-content-colored')),
     );
