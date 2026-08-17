@@ -14,11 +14,13 @@ class LockScreen extends StatefulWidget {
     required this.pinStore,
     required this.biometricService,
     required this.onUnlock,
+    required this.onExternalActivityChanged,
   });
   final AppSettings settings;
   final PinCredentialStore pinStore;
   final BiometricService biometricService;
   final VoidCallback onUnlock;
+  final ValueChanged<bool> onExternalActivityChanged;
   @override
   State<LockScreen> createState() => _LockScreenState();
 }
@@ -87,10 +89,27 @@ class _LockScreenState extends State<LockScreen> {
 
   Future<void> _biometric() async {
     if (_checking || _remaining > 0) return;
-    setState(() => _checking = true);
-    final authenticated = await widget.biometricService.authenticate();
+    setState(() {
+      _checking = true;
+      _error = null;
+    });
+    widget.onExternalActivityChanged(true);
+    var authenticated = false;
+    try {
+      authenticated = await widget.biometricService.authenticate();
+    } on Object {
+      authenticated = false;
+    } finally {
+      widget.onExternalActivityChanged(false);
+    }
     if (!mounted) return;
-    setState(() => _checking = false);
+    setState(() {
+      _checking = false;
+      if (!authenticated) {
+        _pin = '';
+        _error = '생체인증을 취소했습니다. PIN을 입력하세요.';
+      }
+    });
     if (authenticated) widget.onUnlock();
   }
 
@@ -202,11 +221,14 @@ class _LockScreenState extends State<LockScreen> {
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
                     ),

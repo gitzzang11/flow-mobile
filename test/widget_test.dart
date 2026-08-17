@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flow/main.dart';
+import 'package:flow/services/biometric_service.dart';
 import 'package:flow/services/pin_credential_store.dart';
 import 'package:flow/store.dart';
 import 'package:flutter/material.dart';
@@ -178,6 +179,43 @@ void main() {
     expect(saved, isNot(contains('pinCode')));
   });
 
+  testWidgets('지문인증 취소 후 PIN 숫자 패드를 다시 활성화한다', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      PromptStore.storageKey: jsonEncode({
+        'version': 2,
+        'prompts': [],
+        'folders': [],
+        'settings': {
+          'lockEnabled': true,
+          'biometricEnabled': true,
+          'autoLockDuration': 'one_minute',
+        },
+      }),
+    });
+    final pinStore = MemoryPinCredentialStore();
+    await pinStore.setPin('1234');
+    await tester.pumpWidget(
+      FlowApp(
+        pinStore: pinStore,
+        biometricService: _CancelledBiometricService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('생체인증을 취소했습니다. PIN을 입력하세요.'), findsOneWidget);
+    final oneButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '1'),
+    );
+    expect(oneButton.onPressed, isNotNull);
+
+    for (final digit in ['1', '2', '3', '4']) {
+      await tester.tap(find.widgetWithText(FilledButton, digit));
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-screen')), findsOneWidget);
+  });
+
   testWidgets('백그라운드 복귀 시 자동 잠금을 적용한다', (tester) async {
     SharedPreferences.setMockInitialValues({
       PromptStore.storageKey: jsonEncode({
@@ -209,4 +247,9 @@ void main() {
 
     expect(find.byKey(const ValueKey('lock-screen')), findsOneWidget);
   });
+}
+
+class _CancelledBiometricService extends BiometricService {
+  @override
+  Future<bool> authenticate() async => false;
 }

@@ -197,6 +197,7 @@ class _FlowAppState extends State<FlowApp> with WidgetsBindingObserver {
               pinStore: _pinStore,
               biometricService: _biometricService,
               onUnlock: _handleUnlock,
+              onExternalActivityChanged: _setExternalActivity,
             )
           : HomeScreen(
               store: _store,
