@@ -9,14 +9,24 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models.dart';
 import '../store.dart';
+import 'image_attachment_service.dart';
 
 class BackupService {
+  BackupService({ImageAttachmentService? imageService})
+    : imageService = imageService ?? ImageAttachmentService();
+
+  final ImageAttachmentService imageService;
+
   Future<void> sharePrompt(PromptItem prompt, {Rect? origin}) async {
     final tags = prompt.tags.isEmpty
         ? ''
         : '\n\n${prompt.tags.map((tag) => '#$tag').join(' ')}';
     await SharePlus.instance.share(
       ShareParams(
+        files: prompt.imagePaths
+            .where((path) => File(path).existsSync())
+            .map(XFile.new)
+            .toList(),
         text: '[${prompt.title}]\n\n${prompt.plainText}$tags',
         subject: prompt.title,
         sharePositionOrigin: origin,
@@ -32,7 +42,11 @@ class BackupService {
         'flow_backup_${now.year}-${two(now.month)}-${two(now.day)}_'
         '${two(now.hour)}${two(now.minute)}${two(now.second)}.json';
     final file = File('${temp.path}${Platform.pathSeparator}$name');
-    await file.writeAsString(store.exportToJson(), encoding: utf8, flush: true);
+    await file.writeAsString(
+      store.exportToJson(includeImages: true),
+      encoding: utf8,
+      flush: true,
+    );
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path, mimeType: 'application/json')],
@@ -58,6 +72,6 @@ class BackupService {
     if (bytes == null || bytes.isEmpty) {
       throw const FormatException('Empty backup file.');
     }
-    return utf8.decode(bytes);
+    return imageService.restoreEmbeddedImages(utf8.decode(bytes));
   }
 }

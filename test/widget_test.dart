@@ -1,9 +1,13 @@
 import 'dart:convert';
 
 import 'package:flow/main.dart';
+import 'package:flow/models.dart';
+import 'package:flow/services/backup_service.dart';
 import 'package:flow/services/biometric_service.dart';
+import 'package:flow/services/image_attachment_service.dart';
 import 'package:flow/services/pin_credential_store.dart';
 import 'package:flow/store.dart';
+import 'package:flow/widgets/prompt_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,6 +42,115 @@ void main() {
     expect(find.byKey(const ValueKey('prompt-editor-screen')), findsOneWidget);
     expect(find.byKey(const ValueKey('prompt-title-field')), findsOneWidget);
     expect(find.byKey(const ValueKey('save-prompt-button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('prompt-title-color-button')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('add-image-button')),
+      180,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('prompt-editor-list')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.byKey(const ValueKey('add-image-button')), findsOneWidget);
+  });
+
+  testWidgets('카드에 제목색과 구간별 글자색을 표시한다', (tester) async {
+    final now = DateTime.now();
+    final prompt = PromptItem(
+      id: 'colored',
+      title: '색상 카드',
+      titleColorValue: 0xFFE85D5D,
+      folderId: '',
+      tags: const [],
+      createdAt: now,
+      updatedAt: now,
+      segments: const [
+        PromptSegment(text: '파랑', colorValue: 0xFF3B82F6),
+        PromptSegment(text: '초록', colorValue: 0xFF10B981),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 210,
+            height: 300,
+            child: PromptCard(
+              prompt: prompt,
+              textScale: 1,
+              onTap: () {},
+              onCopy: () {},
+              onMore: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('색상 카드')).style?.color,
+      const Color(0xFFE85D5D),
+    );
+    final richText = tester.widget<RichText>(
+      find.byKey(const ValueKey('prompt-card-content-colored')),
+    );
+    final spans = (richText.text as TextSpan).children!.cast<TextSpan>();
+    expect(spans[0].style?.color, const Color(0xFF3B82F6));
+    expect(spans[1].style?.color, const Color(0xFF10B981));
+  });
+
+  testWidgets('사진 보관함 이미지를 추가하고 프롬프트에 저장한다', (tester) async {
+    const imagePath = 'C:/flow_test/attached.jpg';
+    await tester.pumpWidget(
+      FlowApp(
+        pinStore: MemoryPinCredentialStore(),
+        backupService: BackupService(
+          imageService: _FakeImageService(imagePath),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('new-prompt-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('prompt-title-field')),
+      '이미지 프롬프트',
+    );
+    final editorScrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('prompt-editor-list')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('add-image-button')),
+      180,
+      scrollable: editorScrollable,
+    );
+    await tester.tap(find.byKey(const ValueKey('add-image-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('사진 보관함에서 선택'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('prompt-image-list')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('prompt-image-0')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('image-viewer-screen')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('save-prompt-button')));
+    await tester.pumpAndSettle();
+
+    final raw = (await SharedPreferences.getInstance()).getString(
+      PromptStore.storageKey,
+    )!;
+    final prompts = jsonDecode(raw)['prompts'] as List<dynamic>;
+    expect(prompts.last['imagePaths'], [imagePath]);
   });
 
   testWidgets('작은 가로 화면에서도 편집기의 마지막 내용까지 스크롤한다', (tester) async {
@@ -52,19 +165,23 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('new-prompt-button')));
     await tester.pumpAndSettle();
 
-    for (var i = 0; i < 4; i++) {
-      await tester.ensureVisible(find.text('구간 추가'));
-      await tester.pump();
-      await tester.tap(find.text('구간 추가'));
-      await tester.pump();
-    }
-    final lastField = find.byKey(const ValueKey('prompt-segment-field-4'));
     final editorScrollable = find
         .descendant(
           of: find.byKey(const ValueKey('prompt-editor-list')),
           matching: find.byType(Scrollable),
         )
         .first;
+    for (var i = 0; i < 4; i++) {
+      await tester.scrollUntilVisible(
+        find.text('구간 추가'),
+        160,
+        scrollable: editorScrollable,
+      );
+      await tester.pump();
+      await tester.tap(find.text('구간 추가'));
+      await tester.pump();
+    }
+    final lastField = find.byKey(const ValueKey('prompt-segment-field-4'));
     await tester.scrollUntilVisible(
       lastField,
       180,
@@ -252,4 +369,13 @@ void main() {
 class _CancelledBiometricService extends BiometricService {
   @override
   Future<bool> authenticate() async => false;
+}
+
+class _FakeImageService extends ImageAttachmentService {
+  _FakeImageService(this.path);
+
+  final String path;
+
+  @override
+  Future<List<String>> pickFromGallery() async => [path];
 }

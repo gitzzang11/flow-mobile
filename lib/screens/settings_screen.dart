@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models.dart';
 import '../services/backup_service.dart';
@@ -31,6 +32,28 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  String _versionLabel = '버전 확인 중';
+  String _applicationVersion = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _applicationVersion = info.version;
+        _versionLabel = '버전 ${info.version} (${info.buildNumber})';
+      });
+    } on Object {
+      if (mounted) setState(() => _versionLabel = '버전 정보를 확인할 수 없음');
+    }
+  }
+
   AppSettings get settings => widget.store.settings;
   Future<void> _update(AppSettings value) async {
     setState(() => widget.store.settings = value);
@@ -233,6 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'PIN 원문은 저장하지 않고 운영체제 보안 저장소에 검증용 해시만 저장합니다. '
           '생체인증 정보는 Android와 iOS가 직접 처리하며 Flow가 생체정보에 접근하지 않습니다.\n\n'
           '사용자가 공유 또는 백업을 실행한 경우에만 선택한 앱이나 파일 위치로 데이터가 전달됩니다. '
+          '첨부 이미지는 앱 내부에 저장되며 백업을 내보낼 때 백업 파일에 포함됩니다. '
           '백업 파일에는 PIN과 PIN 해시가 포함되지 않습니다.',
         ),
       ),
@@ -358,10 +382,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: _deleteAll,
         ),
         _header('앱 정보'),
-        const ListTile(
-          leading: Icon(Icons.info_outline_rounded),
-          title: Text('Flow'),
-          subtitle: Text('버전 2.0.0 (18)'),
+        ListTile(
+          leading: const Icon(Icons.info_outline_rounded),
+          title: const Text('Flow'),
+          subtitle: Text(_versionLabel),
         ),
         ListTile(
           leading: const Icon(Icons.privacy_tip_outlined),
@@ -374,7 +398,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: () => showLicensePage(
             context: context,
             applicationName: 'Flow',
-            applicationVersion: '2.0.0',
+            applicationVersion: _applicationVersion,
           ),
         ),
         const SizedBox(height: 32),

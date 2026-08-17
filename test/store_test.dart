@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flow/models.dart';
+import 'package:flow/services/image_attachment_service.dart';
 import 'package:flow/store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -85,5 +87,61 @@ void main() {
       ),
       throwsFormatException,
     );
+  });
+
+  test('이미지 경로를 프롬프트 JSON에 보존한다', () {
+    final now = DateTime.now();
+    final prompt = PromptItem(
+      id: 'image-prompt',
+      title: '이미지',
+      titleColorValue: 0xFF123456,
+      folderId: '',
+      tags: const [],
+      createdAt: now,
+      updatedAt: now,
+      segments: const [PromptSegment(text: '내용', colorValue: 0xFF654321)],
+      imagePaths: const ['one.jpg', 'two.png'],
+    );
+
+    expect(PromptItem.fromJson(prompt.toJson()).imagePaths, [
+      'one.jpg',
+      'two.png',
+    ]);
+  });
+
+  test('이미지 포함 백업을 만들고 앱 저장소로 복원한다', () async {
+    final root = await Directory.systemTemp.createTemp('flow_image_test_');
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final source = File('${root.path}${Platform.pathSeparator}source.png');
+    await source.writeAsBytes([1, 2, 3, 4], flush: true);
+    final now = DateTime.now();
+    final store = PromptStore(
+      prompts: [
+        PromptItem(
+          id: 'p',
+          title: '첨부',
+          titleColorValue: 0xFF000000,
+          folderId: '',
+          tags: const [],
+          createdAt: now,
+          updatedAt: now,
+          segments: const [],
+          imagePaths: [source.path],
+        ),
+      ],
+      folders: [],
+      settings: const AppSettings(),
+    );
+    final backup = store.exportToJson(includeImages: true);
+    expect((jsonDecode(backup)['images'] as Map)[source.path], isNotEmpty);
+
+    final service = ImageAttachmentService(directoryProvider: () async => root);
+    final restoredJson = await service.restoreEmbeddedImages(backup);
+    final restored = PromptStore.empty()..importFromJsonString(restoredJson);
+    final restoredFile = File(restored.prompts.single.imagePaths.single);
+    expect(await restoredFile.exists(), isTrue);
+    expect(await restoredFile.readAsBytes(), [1, 2, 3, 4]);
   });
 }

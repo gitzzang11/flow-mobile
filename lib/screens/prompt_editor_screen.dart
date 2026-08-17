@@ -1,8 +1,14 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models.dart';
+import '../services/image_attachment_service.dart';
 import '../store.dart';
+import '../widgets/app_toast.dart';
+import '../widgets/image_viewer.dart';
 
 class PromptEditorScreen extends StatefulWidget {
   const PromptEditorScreen({
@@ -11,6 +17,8 @@ class PromptEditorScreen extends StatefulWidget {
     required this.settings,
     required this.initialFolderId,
     required this.onFavoriteColorsChanged,
+    required this.imageService,
+    required this.onExternalActivityChanged,
     this.prompt,
   });
   final List<FolderItem> folders;
@@ -18,6 +26,8 @@ class PromptEditorScreen extends StatefulWidget {
   final String initialFolderId;
   final PromptItem? prompt;
   final ValueChanged<List<int>> onFavoriteColorsChanged;
+  final ImageAttachmentService imageService;
+  final ValueChanged<bool> onExternalActivityChanged;
 
   @override
   State<PromptEditorScreen> createState() => _PromptEditorScreenState();
@@ -28,8 +38,12 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
   late final TextEditingController _tags;
   late final List<TextEditingController> _segments;
   late final List<int> _colors;
+  late int _titleColor;
+  late final List<String> _imagePaths;
   late String _folderId;
   late String _initialSignature;
+  final _newImagePaths = <String>{};
+  bool _saved = false;
   final _formKey = GlobalKey<FormState>();
 
   int get _defaultColor => widget.settings.darkMode
@@ -43,6 +57,8 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     _title = TextEditingController(text: prompt?.title ?? '');
     _tags = TextEditingController(text: prompt?.tags.join(', ') ?? '');
     _folderId = prompt?.folderId ?? widget.initialFolderId;
+    _titleColor = prompt?.titleColorValue ?? _defaultColor;
+    _imagePaths = [...?prompt?.imagePaths];
     final source = prompt?.segments.isNotEmpty == true
         ? prompt!.segments
         : [PromptSegment(text: '', colorValue: _defaultColor)];
@@ -51,12 +67,15 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
         .toList();
     _colors = source.map((item) => item.colorValue).toList();
     _initialSignature = _signature;
+    _recoverLostImages();
   }
 
   String get _signature => [
     _title.text,
     _tags.text,
     _folderId,
+    _titleColor,
+    ..._imagePaths,
     for (var i = 0; i < _segments.length; i++)
       '${_colors[i]}:${_segments[i].text}',
   ].join('\u0001');
@@ -64,6 +83,9 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
 
   @override
   void dispose() {
+    if (!_saved && _newImagePaths.isNotEmpty) {
+      unawaited(widget.imageService.deleteFiles(_newImagePaths));
+    }
     _title.dispose();
     _tags.dispose();
     for (final controller in _segments) {
@@ -94,6 +116,13 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
         false;
   }
 
+  Future<void> _closeEditor() async {
+    if (!await _confirmDiscard()) return;
+    await widget.imageService.deleteFiles(_newImagePaths);
+    _newImagePaths.clear();
+    if (mounted) Navigator.pop(context);
+  }
+
   List<String> _parseTags() {
     final result = <String>[];
     final seen = <String>{};
@@ -108,12 +137,13 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final now = DateTime.now();
     final existing = widget.prompt;
+    _saved = true;
     Navigator.pop(
       context,
       PromptItem(
         id: existing?.id ?? PromptStore.newId(),
         title: _title.text.trim(),
-        titleColorValue: existing?.titleColorValue ?? _defaultColor,
+        titleColorValue: _titleColor,
         folderId: _folderId,
         tags: _parseTags(),
         createdAt: existing?.createdAt ?? now,
@@ -123,22 +153,101 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
             PromptSegment(text: _segments[i].text, colorValue: _colors[i]),
         ],
         isPinned: existing?.isPinned ?? false,
+        imagePaths: [..._imagePaths],
       ),
     );
   }
 
   Future<void> _pickColor(int index) async {
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => _MobileColorPicker(
-        initialColor: _colors[index],
-        favoriteColors: widget.settings.favoriteColors,
-      ),
-    );
+    final result = await _showColorPicker(_colors[index]);
     if (result != null) setState(() => _colors[index] = result);
   }
+
+  Future<int?> _showColorPicker(int initialColor) => showModalBottomSheet<int>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => _MobileColorPicker(
+      initialColor: initialColor,
+      favoriteColors: widget.settings.favoriteColors,
+    ),
+  );
+
+  Future<void> _pickTitleColor() async {
+    final result = await _showColorPicker(_titleColor);
+    if (result != null) setState(() => _titleColor = result);
+  }
+
+  Future<void> _addImages(bool camera) async {
+    Navigator.pop(context);
+    widget.onExternalActivityChanged(true);
+    try {
+      final paths = camera
+          ? await widget.imageService.takePhoto()
+          : await widget.imageService.pickFromGallery();
+      if (!mounted || paths.isEmpty) return;
+      setState(() {
+        _imagePaths.addAll(paths);
+        _newImagePaths.addAll(paths);
+      });
+    } on Object {
+      if (mounted) showAppToast(context, '이미지를 추가하지 못했습니다.', error: true);
+    } finally {
+      widget.onExternalActivityChanged(false);
+    }
+  }
+
+  Future<void> _recoverLostImages() async {
+    try {
+      final paths = await widget.imageService.recoverLostImages();
+      if (!mounted || paths.isEmpty) return;
+      setState(() {
+        _imagePaths.addAll(paths);
+        _newImagePaths.addAll(paths);
+      });
+      showAppToast(context, '중단되었던 이미지 선택을 복구했습니다.');
+    } on Object {
+      // There may be no recovery channel in widget tests or on iOS.
+    }
+  }
+
+  Future<void> _removeImage(int index) async {
+    final path = _imagePaths[index];
+    setState(() => _imagePaths.removeAt(index));
+    if (_newImagePaths.remove(path)) {
+      await widget.imageService.deleteFiles([path]);
+    }
+  }
+
+  Future<void> _showImageSource() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            title: Text(
+              '이미지 추가',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('사진 보관함에서 선택'),
+            subtitle: const Text('여러 장을 한 번에 선택할 수 있습니다.'),
+            onTap: () => _addImages(false),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('카메라로 촬영'),
+            onTap: () => _addImages(true),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
 
   void _toggleFavorite(int color) {
     final colors = [...widget.settings.favoriteColors];
@@ -153,8 +262,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
       canPop: !_isDirty,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final navigator = Navigator.of(context);
-        if (await _confirmDiscard() && mounted) navigator.pop();
+        await _closeEditor();
       },
       child: Scaffold(
         key: const ValueKey('prompt-editor-screen'),
@@ -162,10 +270,7 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
         appBar: AppBar(
           leading: IconButton(
             tooltip: '닫기',
-            onPressed: () async {
-              final navigator = Navigator.of(context);
-              if (await _confirmDiscard() && mounted) navigator.pop();
-            },
+            onPressed: _closeEditor,
             icon: const Icon(Icons.close_rounded),
           ),
           title: Text(widget.prompt == null ? '프롬프트 만들기' : '프롬프트 편집'),
@@ -207,6 +312,18 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                   validator: (value) =>
                       value?.trim().isEmpty == true ? '제목을 입력하세요.' : null,
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('prompt-title-color-button'),
+                    onPressed: _pickTitleColor,
+                    icon: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: Color(_titleColor),
+                    ),
+                    label: const Text('제목 색상'),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue:
@@ -239,6 +356,89 @@ class _PromptEditorScreenState extends State<PromptEditorScreen> {
                     helperText: '쉼표로 구분하세요.',
                   ),
                 ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '첨부 이미지',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('add-image-button'),
+                      onPressed: _showImageSource,
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      label: const Text('추가'),
+                    ),
+                  ],
+                ),
+                if (_imagePaths.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Column(
+                      children: [
+                        Icon(Icons.image_outlined),
+                        SizedBox(height: 6),
+                        Text('첨부된 이미지가 없습니다.'),
+                      ],
+                    ),
+                  )
+                else
+                  SizedBox(
+                    key: const ValueKey('prompt-image-list'),
+                    height: 104,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.only(top: 8),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _imagePaths.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) => Stack(
+                        children: [
+                          InkWell(
+                            onTap: () => showImageViewer(
+                              context,
+                              _imagePaths,
+                              initialIndex: index,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(_imagePaths[index]),
+                                key: ValueKey('prompt-image-$index'),
+                                width: 96,
+                                height: 96,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const SizedBox(
+                                  width: 96,
+                                  height: 96,
+                                  child: Icon(Icons.broken_image_outlined),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: IconButton.filled(
+                              tooltip: '이미지 삭제',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => _removeImage(index),
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 24),
                 Row(
                   children: [

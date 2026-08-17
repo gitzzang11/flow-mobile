@@ -104,6 +104,8 @@ class _HomeScreenState extends State<HomeScreen> {
           settings: store.settings,
           initialFolderId: _selectedFolderId,
           prompt: prompt,
+          imageService: widget.backupService.imageService,
+          onExternalActivityChanged: widget.onExternalActivityChanged,
           onFavoriteColorsChanged: (colors) {
             store.settings = store.settings.copyWith(favoriteColors: colors);
             widget.onStoreChanged();
@@ -395,9 +397,65 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  String _monthLabel(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year && date.month == now.month) return '이번 달';
+    return date.year == now.year
+        ? '${date.month}월'
+        : '${date.year}년 ${date.month}월';
+  }
+
+  Widget _sectionHeader(String title, {IconData? icon}) => SliverToBoxAdapter(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 7),
+          ],
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _promptGrid(List<PromptItem> prompts) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    sliver: SliverGrid(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 220,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: .76,
+      ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final prompt = prompts[index];
+        return PromptCard(
+          prompt: prompt,
+          textScale: store.settings.cardTextScale,
+          onTap: () => _openEditor(prompt),
+          onCopy: () => _copy(prompt),
+          onMore: () => _showActions(prompt),
+        );
+      }, childCount: prompts.length),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final prompts = _visiblePrompts;
+    final pinnedPrompts = prompts.where((prompt) => prompt.isPinned).toList();
+    final monthGroups = <String, List<PromptItem>>{};
+    for (final prompt in prompts.where((prompt) => !prompt.isPinned)) {
+      final key = '${prompt.updatedAt.year}-${prompt.updatedAt.month}';
+      monthGroups.putIfAbsent(key, () => []).add(prompt);
+    }
     final tags = store.prompts.expand((prompt) => prompt.tags).toSet().toList()
       ..sort();
     return Scaffold(
@@ -582,28 +640,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 hasScrollBody: false,
                 child: _EmptyState(onCreate: () => _openEditor()),
               )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: .76,
-                  ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final prompt = prompts[index];
-                    return PromptCard(
-                      prompt: prompt,
-                      textScale: store.settings.cardTextScale,
-                      onTap: () => _openEditor(prompt),
-                      onCopy: () => _copy(prompt),
-                      onMore: () => _showActions(prompt),
-                    );
-                  }, childCount: prompts.length),
-                ),
-              ),
+            else ...[
+              if (pinnedPrompts.isNotEmpty) ...[
+                _sectionHeader('고정된 프롬프트', icon: Icons.push_pin_rounded),
+                _promptGrid(pinnedPrompts),
+              ],
+              for (final group in monthGroups.values) ...[
+                _sectionHeader(_monthLabel(group.first.updatedAt)),
+                _promptGrid(group),
+              ],
+              const SliverToBoxAdapter(child: SizedBox(height: 88)),
+            ],
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 
@@ -9,7 +10,7 @@ class PromptStore {
     required this.settings,
   });
   static const storageKey = 'flow_store_v1';
-  static const backupVersion = 2;
+  static const backupVersion = 3;
   List<PromptItem> prompts;
   List<FolderItem> folders;
   AppSettings settings;
@@ -57,13 +58,32 @@ class PromptStore {
   Future<void> persist() async => (await SharedPreferences.getInstance())
       .setString(storageKey, exportToJson());
   static String newId() => DateTime.now().microsecondsSinceEpoch.toString();
-  String exportToJson() => jsonEncode({
-    'version': backupVersion,
-    'exportedAt': DateTime.now().toIso8601String(),
-    'prompts': prompts.map((item) => item.toJson()).toList(),
-    'folders': folders.map((item) => item.toJson()).toList(),
-    'settings': settings.toJson(),
-  });
+  String exportToJson({bool includeImages = false}) {
+    final payload = <String, dynamic>{
+      'version': backupVersion,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'prompts': prompts.map((item) => item.toJson()).toList(),
+      'folders': folders.map((item) => item.toJson()).toList(),
+      'settings': settings.toJson(),
+    };
+    if (includeImages) payload['images'] = _collectEmbeddedImages();
+    return jsonEncode(payload);
+  }
+
+  Map<String, String> _collectEmbeddedImages() {
+    final result = <String, String>{};
+    for (final path in prompts.expand((prompt) => prompt.imagePaths)) {
+      if (result.containsKey(path)) continue;
+      final file = File(path);
+      if (!file.existsSync()) continue;
+      try {
+        result[path] = base64Encode(file.readAsBytesSync());
+      } on FileSystemException {
+        // A missing attachment must not make the text backup unusable.
+      }
+    }
+    return result;
+  }
 
   void importFromJsonString(
     String rawJson, {
