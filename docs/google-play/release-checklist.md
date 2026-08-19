@@ -1,9 +1,9 @@
-# Flow 2.1.1 Google Play 출시 체크리스트
+# Flow 1.0.0 Google Play 출시 체크리스트
 
 ## 코드와 산출물
 
 - [x] 고유 applicationId/namespace `com.gitzzang.flow`
-- [x] 버전 `2.1.1+25`
+- [x] 버전 `1.0.0+1`
 - [x] API 36 타깃
 - [x] 불필요한 `INTERNET`/저장소 권한 없음
 - [x] Android 자동 백업 및 기기 간 데이터 이전 제외

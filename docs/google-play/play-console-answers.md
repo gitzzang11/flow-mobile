@@ -41,7 +41,7 @@
 
 - `gitzzang.11@gmail.com`
 
-## 출시 노트 2.1.1
+## 출시 노트 1.0.0
 
 Flow의 첫 Google Play 출시입니다.
 
