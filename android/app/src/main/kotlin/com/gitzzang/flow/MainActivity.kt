@@ -1,4 +1,4 @@
-package com.example.save_prompt
+package com.gitzzang.flow
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

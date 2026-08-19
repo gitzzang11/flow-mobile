@@ -127,7 +127,7 @@ class PromptCard extends StatelessWidget {
                     maxLines: prompt.imagePaths.isEmpty ? 6 : 3,
                     overflow: TextOverflow.ellipsis,
                     text: TextSpan(
-                      style: TextStyle(
+                      style: DefaultTextStyle.of(context).style.copyWith(
                         fontSize: 13 * textScale,
                         height: 1.45,
                         color: scheme.onSurfaceVariant,

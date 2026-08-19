@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -73,6 +75,7 @@ class _FlowAppState extends State<FlowApp> with WidgetsBindingObserver {
   }
 
   Future<void> _bootstrap() async {
+    unawaited(_backupService.cleanupStaleBackups());
     final prefs = await SharedPreferences.getInstance();
     final firstRun = !prefs.containsKey(PromptStore.storageKey);
     _store = await PromptStore.load();

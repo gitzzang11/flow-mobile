@@ -11,6 +11,16 @@ class PromptStore {
   });
   static const storageKey = 'flow_store_v1';
   static const backupVersion = 3;
+  static const maxImportedPrompts = 5000;
+  static const maxImportedFolders = 1000;
+  static const maxTagsPerPrompt = 50;
+  static const maxSegmentsPerPrompt = 200;
+  static const maxImagesPerPrompt = 20;
+  static const maxTitleLength = 500;
+  static const maxFolderNameLength = 200;
+  static const maxTagLength = 100;
+  static const maxSegmentLength = 200000;
+  static const maxPathLength = 4096;
   List<PromptItem> prompts;
   List<FolderItem> folders;
   AppSettings settings;
@@ -101,6 +111,7 @@ class PromptStore {
     if (json['prompts'] is! List || json['folders'] is! List) {
       throw const FormatException('Backup is missing prompt or folder lists.');
     }
+    _validateImportPayload(json);
     final imported = PromptStore.fromJson(json);
     final ids = <String>{};
     for (final prompt in imported.prompts) {
@@ -129,6 +140,97 @@ class PromptStore {
             biometricEnabled: false,
             legacyPinCode: '',
           );
+  }
+
+  static void _validateImportPayload(Map<String, dynamic> json) {
+    final prompts = json['prompts'] as List;
+    final folders = json['folders'] as List;
+    if (prompts.length > maxImportedPrompts ||
+        folders.length > maxImportedFolders) {
+      throw const FormatException('Backup contains too many items.');
+    }
+
+    for (final value in folders) {
+      if (value is! Map) {
+        throw const FormatException('Invalid folder entry.');
+      }
+      final folder = value.cast<String, dynamic>();
+      _requireString(folder['id'], maxPathLength, 'folder id');
+      _requireString(folder['name'], maxFolderNameLength, 'folder name');
+    }
+
+    for (final value in prompts) {
+      if (value is! Map) {
+        throw const FormatException('Invalid prompt entry.');
+      }
+      final prompt = value.cast<String, dynamic>();
+      _requireString(prompt['id'], maxPathLength, 'prompt id');
+      _requireString(prompt['title'], maxTitleLength, 'prompt title');
+      if (prompt['folderId'] != null) {
+        _requireString(
+          prompt['folderId'],
+          maxPathLength,
+          'folder id',
+          allowEmpty: true,
+        );
+      }
+      _validateStringList(
+        prompt['tags'],
+        maxTagsPerPrompt,
+        maxTagLength,
+        'tags',
+      );
+      _validateStringList(
+        prompt['imagePaths'],
+        maxImagesPerPrompt,
+        maxPathLength,
+        'image paths',
+      );
+
+      final segments = prompt['segments'];
+      if (segments is! List || segments.length > maxSegmentsPerPrompt) {
+        throw const FormatException('Invalid prompt segments.');
+      }
+      for (final segmentValue in segments) {
+        if (segmentValue is! Map) {
+          throw const FormatException('Invalid prompt segment.');
+        }
+        _requireString(
+          segmentValue['text'],
+          maxSegmentLength,
+          'prompt text',
+          allowEmpty: true,
+        );
+      }
+    }
+  }
+
+  static void _validateStringList(
+    dynamic value,
+    int maxItems,
+    int maxLength,
+    String field,
+  ) {
+    if (value == null) return;
+    if (value is! List || value.length > maxItems) {
+      throw FormatException('Invalid $field.');
+    }
+    for (final item in value) {
+      _requireString(item, maxLength, field);
+    }
+  }
+
+  static void _requireString(
+    dynamic value,
+    int maxLength,
+    String field, {
+    bool allowEmpty = false,
+  }) {
+    if (value is! String ||
+        (!allowEmpty && value.isEmpty) ||
+        value.length > maxLength) {
+      throw FormatException('Invalid $field.');
+    }
   }
 
   Future<void> savePrompt(PromptItem prompt) async {

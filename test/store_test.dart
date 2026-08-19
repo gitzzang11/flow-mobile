@@ -89,6 +89,31 @@ void main() {
     );
   });
 
+  test('과도하게 긴 프롬프트가 있는 백업을 거부한다', () {
+    final now = DateTime.now().toIso8601String();
+    expect(
+      () => PromptStore.empty().importFromJsonString(
+        jsonEncode({
+          'version': PromptStore.backupVersion,
+          'prompts': [
+            {
+              'id': 'p',
+              'title': 'a' * (PromptStore.maxTitleLength + 1),
+              'folderId': '',
+              'tags': [],
+              'createdAt': now,
+              'updatedAt': now,
+              'segments': [],
+            },
+          ],
+          'folders': [],
+          'settings': {},
+        }),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('이미지 경로를 프롬프트 JSON에 보존한다', () {
     final now = DateTime.now();
     final prompt = PromptItem(
