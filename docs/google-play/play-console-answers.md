@@ -35,11 +35,7 @@
 
 - `https://flow-privacy-policy.ppppjjwww.chatgpt.site`
 - 로그인 없이 열리고 모바일에서 읽을 수 있음(HTTP 200 확인 완료)
-- 앱 이름 `Flow`와 문의 이메일이 스토어 등록정보와 일치해야 함
-
-## 스토어 문의 이메일
-
-- `gitzzang.11@gmail.com`
+- 앱 이름 `Flow`와 개인정보처리방침 내용이 스토어 등록정보와 일치해야 함
 
 ## 출시 노트 1.0.0
 

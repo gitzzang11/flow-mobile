@@ -46,4 +46,4 @@ Flow(이하 “앱”)는 사용자의 프롬프트를 기기 안에서 정리�
 
 ## 10. 문의
 
-개인정보 관련 문의: **gitzzang.11@gmail.com**
+개인정보 관련 문의는 [GitHub Issues](https://github.com/gitzzang11/flow-mobile/issues)를 이용할 수 있습니다.

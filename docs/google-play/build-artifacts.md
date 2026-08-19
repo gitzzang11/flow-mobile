@@ -8,7 +8,6 @@
 - 크기: 약 43.6 MB
 - AAB SHA-256: `04F1A874ACE22A1BFDE5C6E2FB0B18B0B89E9338C4517E437FFB2AF64248863B`
 - 서명자: `CN=Flow Upload, O=gitzzang, C=KR`
-- upload 인증서 SHA-256: `1D:9A:18:76:9A:8A:7F:FC:8F:A1:B7:11:13:8D:C0:2F:D6:72:34:2E:F4:38:2F:29:30:C6:B8:BC:14:23:AE:B9`
 - `jarsigner -verify`: 성공
 
 ## 설치 테스트용 파일

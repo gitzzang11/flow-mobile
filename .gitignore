@@ -47,6 +47,11 @@ app.*.map.json
 # Build releases export directory
 /releases/
 
+# Local environment files
+.env
+.env.*
+!.env.example
+
 # Privacy policy site is maintained and deployed as a separate repository.
 /privacy-site/
 

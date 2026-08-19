@@ -280,8 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           '생체인증 정보는 Android와 iOS가 직접 처리하며 Flow가 생체정보에 접근하지 않습니다.\n\n'
           '사용자가 공유 또는 백업을 실행한 경우에만 선택한 앱이나 파일 위치로 데이터가 전달됩니다. '
           '첨부 이미지는 앱 내부에 저장되며 백업을 내보낼 때 백업 파일에 포함됩니다. '
-          '백업 파일에는 PIN과 PIN 해시가 포함되지 않습니다.\n\n'
-          '개인정보 관련 문의: gitzzang.11@gmail.com',
+          '백업 파일에는 PIN과 PIN 해시가 포함되지 않습니다.',
         ),
       ),
       actions: [
