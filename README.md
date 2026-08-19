@@ -127,13 +127,3 @@ docs/google-play/            Play Console 문서와 개인정보처리방침
 android/                     Android 프로젝트
 ios/                         iOS 프로젝트
 ```
-
-## 문서
-
-- [Google Play 배포 문서](docs/google-play/README.md)
-- [출시 체크리스트](docs/google-play/release-checklist.md)
-- [개인정보처리방침 원문](docs/google-play/privacy-policy-ko.md)
-
-## 문의
-
-버그 제보나 개선 의견은 GitHub [Issues](https://github.com/gitzzang11/flow-mobile/issues) 또는 `gitzzang.11@gmail.com`으로 남겨 주세요.
